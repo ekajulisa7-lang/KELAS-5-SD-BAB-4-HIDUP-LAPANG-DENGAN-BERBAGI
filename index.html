@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petualangan Berbagi Kebaikan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out forwards; }
+        .animate-bounce-slight { animation: bounceSlight 2s infinite ease-in-out; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes bounceSlight {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Catch Game Styles */
+        .falling-item {
+            position: absolute;
+            font-size: 3rem;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s;
+        }
+        .falling-item:hover { transform: scale(1.1); }
+        .falling-item:active { transform: scale(0.9); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #93c5fd; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 selection:bg-blue-200">
+    
+    <!-- Aplikasi akan dirender di sini -->
+    <div id="app-root" class="min-h-screen w-full flex flex-col relative overflow-hidden"></div>
+
+    <script>
+        // --- EFEK SUARA ---
+        const playSound = (type) => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                
+                if (type === 'correct') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(500, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.5, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start(); osc.stop(ctx.currentTime + 0.5);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.5, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                    osc.start(); osc.stop(ctx.currentTime + 0.3);
+                } else if (type === 'yay') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(400, ctx.currentTime);
+                    osc.frequency.setValueAtTime(600, ctx.currentTime + 0.1); osc.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.5, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+                    osc.start(); osc.stop(ctx.currentTime + 0.6);
+                }
+            } catch (e) {}
+        };
+
+        // --- DATA MATERI & ASESMEN ---
+        const GAME_DATA = {
+            p1: {
+                title: "Misi 1: Mengenal Zakat & Infak",
+                slides: [
+                    { text: "Assalamualaikum! Halo, aku Kak Fadil. Hari ini kita akan bertualang belajar tentang Zakat dan Infak! Sudah siap?", icon: '👳‍♂️' },
+                    { text: "Suatu hari, Fadil melihat banyak orang memberikan beras ke masjid di akhir bulan Ramadan. Tahukah kamu apa itu?", icon: '🕌' },
+                    { title: "Zakat Fitrah", text: "Zakat menurut bahasa artinya suci, tumbuh, dan berkembang. Zakat fitrah wajib dibayar oleh umat Islam di bulan Ramadan berupa makanan pokok (seperti beras 2,5 kg atau 3,5 liter) sebelum Shalat Idul Fitri.", icon: '🍚' },
+                    { title: "8 Golongan Penerima Zakat", text: "Zakat disalurkan kepada Mustahik (penerima): Fakir, Miskin, Amil, Mualaf, Riqab, Gharim, Fisabilillah, dan Ibnu Sabil.", icon: '🤲' },
+                    { title: "Infak", text: "Berbeda dengan zakat yang wajib, Infak adalah membelanjakan harta untuk kebaikan yang jumlah dan waktunya bebas (sunah).", icon: '💰' },
+                    { text: "Contoh infak: Memasukkan uang ke kotak amal masjid. Manfaatnya sangat besar untuk diri sendiri dan orang lain! Ayo kita mainkan gamenya!", icon: '🎮' }
+                ],
+                games: [
+                    { type: 'quiz', title: 'Game 1: Pilih Jawaban Tepat', qs: [
+                        {q:'Zakat fitrah wajib dikeluarkan berupa?', opts:['Makanan Pokok (Beras)', 'Buku Tulis'], a:0, msg:'Tepat! Zakat fitrah menggunakan makanan pokok setempat.'},
+                        {q:'Orang yang berhak menerima zakat disebut?', opts:['Muzaki', 'Mustahik'], a:1, msg:'Benar! Muzaki adalah yang membayar, Mustahik adalah yang menerima.'}
+                    ]},
+                    { type: 'sort', title: 'Game 2: Susun Puzzle Zakat', instruction: 'Urutkan proses zakat fitrah dari awal hingga sampai ke penerima!', items: ['Niat membayar zakat di hati', 'Menyiapkan beras 2,5 kg', 'Membawa beras ke Amil di masjid', 'Amil membagikannya ke Mustahik'] },
+                    { type: 'match', title: 'Game 3: Siapa Penerima Zakat?', pairs: [{l:'Fakir', r:'Sangat miskin, tidak punya harta'}, {l:'Gharim', r:'Orang yang banyak hutang kebaikan'}, {l:'Amil', r:'Panitia pengurus zakat'}] },
+                    { type: 'quiz', title: 'Game 4: Petualangan Kotak Infak', qs: [
+                        {q:'Di sekolahmu ada sumbangan untuk teman yang sakit. Apa tindakan terbaik?', opts:['Ikut menyumbang (infak) seikhlasnya', 'Pura-pura tidak tahu'], a:0, msg:'Luar biasa! Berinfak menumbuhkan kepedulian.'},
+                        {q:'Saat Shalat Jumat, kotak amal lewat di depanmu. Kamu memiliki sisa uang jajan.', opts:['Menyimpannya untuk beli mainan semua', 'Memasukkan sebagian ke kotak amal'], a:1, msg:'Hebat! Berbagi tidak akan membuatmu miskin.'}
+                    ]}
+                ],
+                assessment: [
+                    { type: 'pg', id: 'p1_1', q: '1. Apa arti zakat secara bahasa?', options: ['Suci, tumbuh, berkembang', 'Menahan lapar', 'Berbagi makanan', 'Membayar denda'], a: 0, pembahasan: 'Zakat secara bahasa artinya suci, tumbuh, berkembang, dan berkah.' },
+                    { type: 'pg', id: 'p1_2', q: '2. Zakat fitrah wajib dibayarkan pada waktu...', options: ['Awal tahun Hijriah', 'Bulan Ramadan sebelum shalat Idul Fitri', 'Bulan Dzulhijjah', 'Setiap hari Jumat'], a: 1, pembahasan: 'Wajib dibayar sejak terbenam matahari hari terakhir Ramadan hingga sebelum shalat Idul Fitri.' },
+                    { type: 'pg', id: 'p1_3', q: '3. Berapa besaran zakat fitrah yang dibayarkan berupa beras?', options: ['1 kg', '2,5 kg atau 3,5 liter', '5 kg', '10 kg'], a: 1, pembahasan: 'Besaran zakat fitrah umumnya adalah 1 sha atau setara dengan 2,5 kg (3,5 liter) makanan pokok.' },
+                    { type: 'pg', id: 'p1_4', q: '4. Golongan orang yang berhak menerima zakat disebut...', options: ['Muzaki', 'Amil', 'Mustahik', 'Mualaf'], a: 2, pembahasan: 'Mustahik adalah sebutan untuk orang yang berhak menerima zakat.' },
+                    { type: 'pg', id: 'p1_5', q: '5. Mengeluarkan harta untuk kebaikan yang tidak ditentukan jumlah dan waktunya disebut...', options: ['Zakat', 'Infak', 'Pajak', 'Fidyah'], a: 1, pembahasan: 'Infak adalah membelanjakan atau mengeluarkan harta untuk kebaikan di jalan Allah.' },
+                    { type: 'tf', id: 'p1_6', q: '6. Benar atau Salah: Zakat fitrah hanya wajib bagi orang dewasa.', options: ['Benar', 'Salah'], a: 1, pembahasan: 'Salah. Zakat fitrah wajib bagi seluruh umat Islam yang mampu, baik dewasa maupun anak-anak.' },
+                    { type: 'tf', id: 'p1_7', q: '7. Benar atau Salah: Mualaf (orang yang baru masuk Islam) berhak menerima zakat.', options: ['Benar', 'Salah'], a: 0, pembahasan: 'Benar. Mualaf adalah salah satu dari 8 golongan penerima zakat (Asnaf).' },
+                    { type: 'match', id: 'p1_8', q: '8. Pasangkan golongan penerima zakat ini dengan artinya!', pairs: [{l: 'Fakir', r: 'Orang yang tidak punya harta dan tenaga'}, {l: 'Ibnu Sabil', r: 'Musafir yang kehabisan bekal dalam perjalanan'}] },
+                    { type: 'match', id: 'p1_9', q: '9. Pasangkan istilah berikut!', pairs: [{l: 'Muzaki', r: 'Orang yang wajib membayar zakat'}, {l: 'Amil', r: 'Panitia pengelola zakat'}] },
+                    { type: 'case', id: 'p1_10', q: '10. Studi Kasus: Ahmad memiliki sisa uang jajan. Saat istirahat, ia memasukkannya ke kotak amal masjid sekolah. Apa yang dilakukan Ahmad?', options: ['Membayar zakat', 'Memberi hadiah', 'Berinfak', 'Membayar denda'], a: 2, pembahasan: 'Memasukkan uang ke kotak amal tanpa jumlah/waktu tertentu adalah contoh infak.' }
+                ]
+            },
+            p2: {
+                title: "Misi 2: Keajaiban Sedekah & Hadiah",
+                slides: [
+                    { text: "Selamat datang kembali! Di Misi 2 ini, kita jelajahi keajaiban Sedekah dan Indahnya Hadiah.", icon: '👳‍♂️' },
+                    { title: "Sedekah", text: "Sedekah sangat istimewa! Tidak hanya berupa harta (uang/barang), tetapi juga bisa nonmateri (jasa atau perbuatan baik). Semuanya harus dilakukan dengan ikhlas.", icon: '🤝' },
+                    { title: "Sedekah Nonmateri", text: "Tersenyum ramah kepada teman, menyingkirkan duri di jalan, dan menolong orang tua adalah contoh sedekah perbuatan yang sangat dicintai Allah.", icon: '😊' },
+                    { title: "Hadiah", text: "Hadiah adalah pemberian untuk memuliakan, mengapresiasi (seperti juara kelas), atau mempererat kasih sayang. Memberi hadiah membuat hubungan makin harmonis!", icon: '🎁' },
+                    { title: "Adab Berbagi", text: "Ingat, berikan hadiah dan sedekah tanpa mengharap imbalan dan jangan pernah pamer (riya). Mari kita mulai tantangannya!", icon: '🎮' }
+                ],
+                games: [
+                    { type: 'categorize', title: 'Game 1: Sedekah atau Bukan?', items: [{text: 'Menyingkirkan paku dari tengah jalan', cat: 'sedekah'}, {text: 'Memamerkan sepeda baru ke teman', cat: 'bukan'}, {text: 'Membantu ibu menyapu rumah', cat: 'sedekah'}] },
+                    { type: 'catch', title: 'Game 2: Tangkap Kebaikan!', instruction: 'Tangkap kebaikan (🎁, 💰, 🤝, 😊)! Hindari yang buruk (😠, 🗑️).' },
+                    { type: 'quiz', title: 'Game 3: Berburu Hadiah', qs: [
+                        {q:'Apa tujuan utama memberikan hadiah?', opts:['Agar dipuji orang', 'Mempererat tali persaudaraan'], a:1, msg:'Tepat sekali! Hadiah menumbuhkan rasa kasih sayang.'},
+                        {q:'Bagaimana sikap yang benar saat menerima hadiah yang murah?', opts:['Berterimakasih dan bersyukur', 'Menolaknya'], a:0, msg:'Benar! Hargai setiap pemberian.'}
+                    ]},
+                    { type: 'quiz', title: 'Game 4: Pilih Perilaku Terbaik', qs: [
+                        {q:'Temanmu mendapat nilai 100 dan juara kelas. Sikapmu?', opts:['Memberinya hadiah kecil dan selamat', 'Diam saja karena iri'], a:0, msg:'Keren! Itu sikap anak muslim yang baik.'}
+                    ]}
+                ],
+                assessment: [
+                    { type: 'pg', id: 'p2_1', q: '1. Sedekah tidak hanya berupa uang, tetapi bisa juga berupa...', options: ['Pujian palsu', 'Senyuman yang tulus', 'Barang curian', 'Tugas sekolah'], a: 1, pembahasan: 'Senyum yang tulus kepada saudara adalah bentuk sedekah termudah (nonmateri).' },
+                    { type: 'pg', id: 'p2_2', q: '2. Memindahkan duri atau batu dari tengah jalan agar tidak membahayakan orang lain termasuk...', options: ['Zakat', 'Infak', 'Sedekah', 'Hadiah'], a: 2, pembahasan: 'Menyingkirkan rintangan dari jalan adalah contoh sedekah perbuatan yang berpahala besar.' },
+                    { type: 'pg', id: 'p2_3', q: '3. Tujuan utama memberikan hadiah kepada teman adalah untuk...', options: ['Memamerkan kekayaan', 'Meminta imbalan', 'Mempererat tali persaudaraan', 'Agar dipuji guru'], a: 2, pembahasan: 'Hadiah diberikan untuk mempererat kasih sayang dan menghargai prestasi orang lain.' },
+                    { type: 'pg', id: 'p2_4', q: '4. Sikap yang paling tepat saat menerima hadiah adalah...', options: ['Mencela karena murah', 'Mengucapkan terima kasih dan bersyukur', 'Membuangnya', 'Menyembunyikannya'], a: 1, pembahasan: 'Kita wajib bersyukur dan berterima kasih sekecil apa pun hadiah yang diterima.' },
+                    { type: 'pg', id: 'p2_5', q: '5. Hukum bersedekah secara umum dalam Islam adalah...', options: ['Wajib', 'Sunah', 'Haram', 'Makruh'], a: 1, pembahasan: 'Hukum sedekah secara umum adalah sunah (sangat dianjurkan).' },
+                    { type: 'tf', id: 'p2_6', q: '6. Benar atau Salah: Kita hanya boleh bersedekah jika sudah sangat kaya raya.', options: ['Benar', 'Salah'], a: 1, pembahasan: 'Salah. Sedekah bisa dilakukan kapan saja sesuai kemampuan, bahkan hanya dengan senyuman.' },
+                    { type: 'tf', id: 'p2_7', q: '7. Benar atau Salah: Memberikan barang yang sudah rusak sebagai hadiah adalah adab yang baik.', options: ['Benar', 'Salah'], a: 1, pembahasan: 'Salah. Adab memberi hadiah/sedekah adalah memberikan sesuatu yang baik dan masih bermanfaat.' },
+                    { type: 'match', id: 'p2_8', q: '8. Pasangkan contoh perbuatan berikut!', pairs: [{l: 'Membantu nenek menyeberang', r: 'Sedekah perbuatan'}, {l: 'Memberi kado ulang tahun', r: 'Hadiah'}] },
+                    { type: 'match', id: 'p2_9', q: '9. Pasangkan hikmah berbagi berikut!', pairs: [{l: 'Manfaat bersedekah', r: 'Menolak bala dan memanjangkan umur'}, {l: 'Manfaat hadiah', r: 'Menumbuhkan rasa saling mencintai'}] },
+                    { type: 'case', id: 'p2_10', q: '10. Studi Kasus: Siti melihat temannya menangis karena kehilangan pensil. Siti meminjamkan pensilnya dan menghiburnya. Tindakan Siti termasuk...', options: ['Membayar zakat', 'Sedekah nonmateri', 'Sifat riya/pamer', 'Infak'], a: 1, pembahasan: 'Menghibur dan membantu meminjamkan barang adalah sedekah nonmateri.' }
+                ]
+            },
+            p3: {
+                title: "Misi 3: Pahlawan Kebaikan",
+                slides: [
+                    { text: "Luar biasa! Kamu sampai di Misi 3. Saatnya menjadi Pahlawan Kebaikan sejati!", icon: '🦸‍♂️' },
+                    { title: "Ringkasan Perbedaan", text: "Mari kita ingat: Zakat itu WAJIB dengan aturan khusus. Infak itu SUNAH berupa harta. Sedekah itu SUNAH (bisa harta/perbuatan). Hadiah adalah pemberian apresiasi.", icon: '📊' },
+                    { title: "Hikmah Berbagi", text: "Berbagi membuat kita dekat dengan Allah, menumbuhkan rasa syukur, menghilangkan sifat egois dan kikir (pelit), serta menciptakan masyarakat yang damai dan peduli.", icon: '💖' },
+                    { text: "Selesaikan 5 tantangan terakhir ini untuk meraih gelar Pahlawan Kebaikan!", icon: '🏆' }
+                ],
+                games: [
+                    { type: 'doors', title: 'Game 1: 4 Pintu Kebaikan', qs: [{q:'Kewajiban harta di bulan Ramadan?', opts:['Zakat Fitrah'], a:0}, {q:'Membelanjakan uang untuk kebaikan?', opts:['Infak'], a:0}, {q:'Pemberian berupa jasa/perbuatan?', opts:['Sedekah'], a:0}, {q:'Pemberian karena kasih sayang?', opts:['Hadiah'], a:0}] },
+                    { type: 'match', title: 'Game 2: Pasangkan Istilah', pairs: [{l:'Zakat', r:'Hukumnya Wajib'}, {l:'Infak', r:'Harta di jalan Allah'}, {l:'Sedekah', r:'Bisa berupa senyuman'}] },
+                    { type: 'quiz', title: 'Game 3: Detektif Kebaikan', qs: [
+                        {q:'Pak Ali memberikan 2,5 kg beras kepada Amil di masjid. Ini disebut?', opts:['Zakat Fitrah', 'Hadiah'], a:0, msg:'Benar! Beras 2,5 kg di masjid umumnya adalah Zakat Fitrah.'},
+                        {q:'Andi membelikan ibu sebuah jilbab dengan uang tabungannya. Ini disebut?', opts:['Infak', 'Hadiah'], a:1, msg:'Tepat! Memberi sesuatu karena sayang kepada ibu adalah Hadiah.'}
+                    ]},
+                    { type: 'quiz', title: 'Game 4: Simulasi Desa Berbagi', qs: [
+                        {q:'Desa kekeringan. Warga yang punya sumur bor membolehkan tetangga ambil air gratis. Ini mencerminkan?', opts:['Sedekah dan kepedulian', 'Sikap pamer kekayaan'], a:0, msg:'Betul! Berbagi meringankan beban sesama.'}
+                    ]},
+                    { type: 'quiz', title: 'Game 5: Tantangan Terakhir', qs: [
+                        {q:'Berbagi akan membuat rezeki kita berkurang dan cepat habis.', opts:['Salah', 'Benar'], a:0, msg:'Hebat! Allah akan melipatgandakan rezeki orang yang berbagi.'},
+                        {q:'Orang yang menolak membayar zakat fitrah padahal mampu, maka ia berdosa.', opts:['Benar', 'Salah'], a:0, msg:'Benar. Zakat fitrah hukumnya wajib (fardu ain).'}
+                    ]}
+                ],
+                assessment: [
+                    { type: 'pg', id: 'p3_1', q: '1. Kewajiban mengeluarkan harta tertentu pada bulan Ramadan disebut...', options: ['Zakat Fitrah', 'Sedekah', 'Hadiah', 'Infak'], a: 0, pembahasan: 'Pengeluaran harta khusus berupa makanan pokok di bulan Ramadan adalah zakat fitrah.' },
+                    { type: 'pg', id: 'p3_2', q: '2. Berikut ini yang BUKAN hikmah dari kebiasaan berbagi adalah...', options: ['Mendekatkan diri pada Allah', 'Mendapat pahala', 'Menjadi cepat miskin dan rugi', 'Mempererat persaudaraan'], a: 2, pembahasan: 'Berbagi tidak akan membuat miskin. Sebaliknya, harta menjadi berkah.' },
+                    { type: 'pg', id: 'p3_3', q: '3. Kebiasaan berbagi membantu kita untuk menjauhi sifat buruk, yaitu...', options: ['Pemurah', 'Kikir atau pelit', 'Sabar', 'Ikhlas'], a: 1, pembahasan: 'Berbagi melatih hati kita untuk tidak kikir dan egois.' },
+                    { type: 'pg', id: 'p3_4', q: '4. Kepada siapa zakat TIDAK BOLEH diberikan?', options: ['Orang sangat miskin', 'Orang kaya raya yang mampu', 'Amil (Panitia)', 'Ibnu Sabil (Musafir kehabisan bekal)'], a: 1, pembahasan: 'Orang yang sudah mampu dan kaya raya tidak berhak menerima zakat.' },
+                    { type: 'pg', id: 'p3_5', q: '5. Syarat utama agar infak dan sedekah kita diterima oleh Allah Swt. adalah...', options: ['Dilihat banyak orang', 'Ikhlas karena Allah', 'Diunggah ke media sosial', 'Jumlahnya sangat besar'], a: 1, pembahasan: 'Niat yang ikhlas adalah kunci utama diterimanya seluruh ibadah.' },
+                    { type: 'tf', id: 'p3_6', q: '6. Benar atau Salah: Memberi sedekah kepada pengemis dengan wajah marah tetap mendapat pahala sempurna.', options: ['Benar', 'Salah'], a: 1, pembahasan: 'Salah. Sedekah harus diberikan dengan adab yang baik dan tidak menyakiti perasaan.' },
+                    { type: 'tf', id: 'p3_7', q: '7. Benar atau Salah: Zakat diwajibkan bagi yang mampu, sedangkan infak dan sedekah dianjurkan kapan saja.', options: ['Benar', 'Salah'], a: 0, pembahasan: 'Benar. Perbedaan mendasarnya ada pada hukum wajib dan sunah serta ketentuannya.' },
+                    { type: 'match', id: 'p3_8', q: '8. Pasangkan istilah kebaikan berikut!', pairs: [{l: 'Zakat', r: 'Kewajiban berbagi dengan aturan tertentu'}, {l: 'Infak', r: 'Membelanjakan harta untuk kebaikan (tanpa batas)'}] },
+                    { type: 'match', id: 'p3_9', q: '9. Pasangkan istilah kebaikan berikut!', pairs: [{l: 'Sedekah', r: 'Berbagi harta maupun jasa secara ikhlas'}, {l: 'Hadiah', r: 'Pemberian untuk apresiasi/mempererat hubungan'}] },
+                    { type: 'case', id: 'p3_10', q: '10. Studi Kasus: Di desa ada banjir. Fadil menyumbangkan pakaian, ibunya memasak. Hikmahnya adalah...', options: ['Menghabiskan makanan', 'Menumbuhkan kepedulian dan gotong royong', 'Agar masuk televisi', 'Hanya mencari kesibukan'], a: 1, pembahasan: 'Musibah adalah momen untuk bersatu, peduli, dan bergotong royong.' }
+                ]
+            }
+        };
+
+        // --- GLOBAL STATE ---
+        const APP = {
+            view: 'loading',
+            student: null,
+            teacherData: [],
+            currentLvl: null,
+            lvlStage: 'slides',
+            slideIdx: 0,
+            gameIdx: 0,
+            tempState: {} // Untuk menyimpan state game (seperti puzzle order, jawaban kuis, interval id)
+        };
+
+        // DOM Elements
+        const root = document.getElementById('app-root');
+
+        // --- CORE FUNCTIONS ---
+        const setView = (v) => { APP.view = v; render(); };
+        
+        // Komponen UI Helper
+        const Button = (text, action, variant = 'primary', extraClass = '', disabled = false) => {
+            const base = `px-6 py-3 rounded-2xl font-bold text-lg shadow-lg transform transition-all active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed transform-none' : 'hover:scale-105'}`;
+            const variants = {
+                primary: "bg-gradient-to-b from-blue-400 to-blue-600 text-white hover:from-blue-500 hover:to-blue-700",
+                success: "bg-gradient-to-b from-green-400 to-green-600 text-white hover:from-green-500 hover:to-green-700",
+                warning: "bg-gradient-to-b from-yellow-400 to-yellow-600 text-white hover:from-yellow-500 hover:to-yellow-700",
+                outline: "bg-white text-blue-600 border-2 border-blue-400 hover:bg-blue-50"
+            };
+            return `<button ${disabled?'disabled':''} data-action="${action}" class="${base} ${variants[variant]} ${extraClass}">${text}</button>`;
+        };
+
+        const DialogBox = (text, icon) => `
+            <div class="flex items-start bg-blue-50 p-4 rounded-3xl border-4 border-blue-200 mb-6 shadow-md transform transition-all animate-bounce-slight">
+                <div class="text-6xl mr-4 bg-white rounded-full p-2 shadow-sm">${icon}</div>
+                <div class="flex-1 bg-white p-4 rounded-2xl shadow-sm relative border border-gray-100">
+                    <div class="absolute -left-2 top-6 w-4 h-4 bg-white transform rotate-45 border-l border-b border-gray-100"></div>
+                    <p class="text-xl font-medium text-gray-700 leading-relaxed">${text}</p>
+                </div>
+            </div>
+        `;
+
+        // --- RENDERERS ---
+        function render() {
+            clearGameIntervals(); // Bersihkan game loop jika ada
+            
+            if (APP.view === 'loading') {
+                root.innerHTML = `<div class="flex-1 flex items-center justify-center"><div class="text-3xl font-black animate-pulse text-blue-600">Memuat Petualangan...</div></div>`;
+            } else if (APP.view === 'intro') {
+                root.innerHTML = `
+                    <div class="flex-1 bg-gradient-to-b from-blue-300 to-indigo-500 flex flex-col items-center justify-center p-6 text-center">
+                        <div class="bg-white p-10 rounded-3xl shadow-2xl max-w-lg w-full animate-fade-in-up">
+                            <div class="text-7xl mb-6">🕌🎒🎁</div>
+                            <h1 class="text-4xl font-black text-blue-800 mb-2 leading-tight">PETUALANGAN BERBAGI KEBAIKAN</h1>
+                            <p class="text-xl font-medium text-gray-600 mb-8">"Ayo Berbagi, Hidup Lebih Berarti!"</p>
+                            <div class="space-y-4 flex flex-col">
+                                ${Button('Mulai Bermain (Siswa)', 'toLoginSiswa', 'primary', 'w-full py-4 text-xl')}
+                                ${Button('Masuk sebagai Guru', 'toLoginGuru', 'outline', 'w-full')}
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (APP.view === 'loginSiswa' || APP.view === 'loginGuru') {
+                const isGuru = APP.view === 'loginGuru';
+                root.innerHTML = `
+                    <div class="flex-1 bg-gradient-to-br from-teal-200 to-blue-400 flex items-center justify-center p-4 relative">
+                        <button data-action="toIntro" class="absolute top-8 left-8 text-white font-bold text-xl hover:underline">🔙 Kembali</button>
+                        <form id="loginForm" class="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full relative animate-fade-in">
+                            <h2 class="text-3xl font-black text-center mb-6 text-gray-800">${isGuru ? 'Dasbor Guru' : 'Identitas Siswa'}</h2>
+                            <div id="loginError" class="hidden text-red-500 text-center mb-4 font-bold bg-red-100 p-2 rounded-xl"></div>
+                            ${!isGuru ? `
+                                <input required id="studentName" placeholder="Nama Lengkap" class="w-full p-4 mb-4 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-lg font-semibold" />
+                                <select required id="studentClass" class="w-full p-4 mb-6 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-lg font-semibold">
+                                    <option value="" disabled selected>Pilih Kelas</option>
+                                    <option value="5A">Kelas 5A</option>
+                                    <option value="5B">Kelas 5B</option>
+                                    <option value="5C">Kelas 5C</option>
+                                </select>
+                            ` : `
+                                <input required type="password" id="guruPin" placeholder="PIN Guru (GURU5SD)" class="w-full p-4 mb-6 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none text-lg" />
+                            `}
+                            <button type="submit" class="w-full px-6 py-4 rounded-2xl font-bold text-xl text-white bg-gradient-to-b from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 shadow-lg">${isGuru ? 'Buka Dasbor' : 'Mulai Petualangan'}</button>
+                        </form>
+                    </div>`;
+                    
+                document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const errEl = document.getElementById('loginError');
+                    errEl.classList.add('hidden');
+                    if (isGuru) {
+                        const pin = document.getElementById('guruPin').value;
+                        if(pin !== 'GURU5SD') { errEl.textContent = 'PIN Salah!'; errEl.classList.remove('hidden'); return; }
+                        fetchTeacherData();
+                    } else {
+                        const name = document.getElementById('studentName').value;
+                        const kelas = document.getElementById('studentClass').value;
+                        if(!name || !kelas) return;
+                        loginStudent(name, kelas);
+                    }
+                });
+            } else if (APP.view === 'dashboard') {
+                let rows = '';
+                if(APP.teacherData.length === 0) {
+                    rows = `<tr><td colSpan="6" class="text-center p-8 text-gray-500">Belum ada data siswa.</td></tr>`;
+                } else {
+                    APP.teacherData.forEach(s => {
+                        const avg = ((s.scores.a1 + s.scores.a2 + s.scores.a3) / 3).toFixed(1);
+                        rows += `<tr class="border-b hover:bg-gray-50">
+                            <td class="p-4 font-bold text-gray-800">${s.name}</td>
+                            <td class="p-4 text-gray-600">${s.kelas}</td>
+                            <td class="p-4">${s.progress.p1 ? `<span class="text-green-600 font-bold bg-green-100 px-3 py-1 rounded-full">${s.scores.a1}</span>` : `<span class="text-gray-400">-</span>`}</td>
+                            <td class="p-4">${s.progress.p2 ? `<span class="text-green-600 font-bold bg-green-100 px-3 py-1 rounded-full">${s.scores.a2}</span>` : `<span class="text-gray-400">-</span>`}</td>
+                            <td class="p-4">${s.progress.p3 ? `<span class="text-green-600 font-bold bg-green-100 px-3 py-1 rounded-full">${s.scores.a3}</span>` : `<span class="text-gray-400">-</span>`}</td>
+                            <td class="p-4 font-black text-blue-600">${avg > 0 ? avg : '-'}</td>
+                        </tr>`;
+                    });
+                }
+                root.innerHTML = `
+                    <div class="flex-1 bg-gray-100 p-4 md:p-8">
+                        <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-3xl shadow-lg animate-fade-in">
+                            <div class="flex flex-col md:flex-row justify-between items-center mb-8 border-b pb-4 gap-4">
+                                <h2 class="text-3xl font-black text-gray-800">📊 Dasbor Rekap Nilai Siswa</h2>
+                                ${Button('Keluar Dasbor', 'toIntro', 'outline')}
+                            </div>
+                            <div class="overflow-x-auto rounded-2xl border border-gray-200">
+                                <table class="w-full text-left border-collapse whitespace-nowrap">
+                                    <thead>
+                                        <tr class="bg-blue-100 text-blue-900 border-b-2 border-blue-200">
+                                            <th class="p-4">Nama Siswa</th>
+                                            <th class="p-4">Kelas</th>
+                                            <th class="p-4">Misi 1 (Zakat & Infak)</th>
+                                            <th class="p-4">Misi 2 (Sedekah & Hadiah)</th>
+                                            <th class="p-4">Misi 3 (Final)</th>
+                                            <th class="p-4">Rata-rata</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (APP.view === 'map') {
+                const s = APP.student;
+                const p1 = s.progress.p1, p2 = s.progress.p2, p3 = s.progress.p3;
+                
+                root.innerHTML = `
+                    <div class="flex-1 bg-blue-100 flex flex-col items-center justify-center p-4 relative">
+                        <div class="absolute top-0 w-full h-64 bg-blue-300 rounded-b-[50%] opacity-50 z-0"></div>
+                        <div class="z-10 bg-white p-6 md:p-8 rounded-3xl shadow-2xl max-w-2xl w-full text-center animate-fade-in-up">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-2xl font-bold text-gray-700">Halo, <span class="text-blue-600">${s.name}</span>! 👋</h2>
+                                <button data-action="toIntro" class="text-red-500 font-bold hover:underline bg-red-50 px-4 py-2 rounded-xl">Keluar</button>
+                            </div>
+                            
+                            <h1 class="text-4xl font-black text-blue-800 mb-8">Peta Kebaikan</h1>
+                            
+                            <div class="space-y-6 relative flex flex-col items-center">
+                                ${Button(`<div class="flex w-full justify-between items-center px-4"><span class="text-2xl">1️⃣ Pertemuan 1</span> <span>${p1 ? `✅ Nilai: ${s.scores.a1}` : 'Mulai ▶️'}</span></div>`, 'start_p1', 'primary', 'w-full py-6')}
+                                
+                                <div class="h-8 border-l-4 border-dashed border-gray-400"></div>
+
+                                ${Button(`<div class="flex w-full justify-between items-center px-4"><span class="text-2xl">2️⃣ Pertemuan 2</span> <span>${!p1 ? '🔒 Terkunci' : p2 ? `✅ Nilai: ${s.scores.a2}` : 'Mulai ▶️'}</span></div>`, p1 ? 'start_p2' : '', 'primary', 'w-full py-6', !p1)}
+                                
+                                <div class="h-8 border-l-4 border-dashed border-gray-400"></div>
+
+                                ${Button(`<div class="flex w-full justify-between items-center px-4"><span class="text-2xl">3️⃣ Misi Final</span> <span>${!p2 ? '🔒 Terkunci' : p3 ? `🏆 LULUS! (${s.scores.a3})` : 'Mulai Puncak ▶️'}</span></div>`, p2 ? 'start_p3' : '', 'warning', 'w-full py-6', !p2)}
+                            </div>
+                            
+                            ${p3 ? `
+                            <div class="mt-10 p-6 bg-yellow-100 border-4 border-yellow-400 rounded-2xl animate-bounce-slight shadow-lg">
+                                <h3 class="text-2xl font-black text-yellow-800 mb-2">🎉 SELAMAT! 🎉</h3>
+                                <p class="text-xl font-bold text-yellow-700">Kamu telah menjadi PAHLAWAN KEBAIKAN sejati! 🏅</p>
+                            </div>` : ''}
+                        </div>
+                    </div>`;
+            } else if (APP.view === 'level') {
+                renderLevelLogic();
+            }
+        }
+
+        // --- LEVEL & MINIGAME ENGINE ---
+        function renderLevelLogic() {
+            const data = GAME_DATA[APP.currentLvl];
+            let innerHTML = '';
+            
+            if (APP.lvlStage === 'slides') {
+                const slide = data.slides[APP.slideIdx];
+                innerHTML = `
+                    <div class="flex flex-col h-full justify-between animate-fade-in p-2 md:p-6">
+                        <div>
+                            <div class="flex justify-center mb-8">
+                                <span class="bg-blue-100 text-blue-800 font-bold px-5 py-2 rounded-full text-sm shadow-sm border border-blue-200">
+                                    Materi ${APP.slideIdx + 1} / ${data.slides.length}
+                                </span>
+                            </div>
+                            ${slide.title ? `<h3 class="text-3xl font-black text-center mb-6 text-gray-800">${slide.title}</h3>` : ''}
+                            ${DialogBox(slide.text, slide.icon)}
+                        </div>
+                        <div class="mt-8">
+                            ${Button(APP.slideIdx < data.slides.length - 1 ? 'Selanjutnya ➡️' : 'Mulai Misi! 🚀', 'nextSlide', 'primary', 'w-full py-4 text-xl')}
+                        </div>
+                    </div>`;
+            } else if (APP.lvlStage === 'games') {
+                const game = data.games[APP.gameIdx];
+                
+                let gameContent = '';
+                
+                if (game.type === 'quiz' || game.type === 'doors') {
+                    // Inisialisasi state kuis internal jika belum ada
+                    if(APP.tempState.qIdx === undefined) APP.tempState.qIdx = 0;
+                    const q = game.qs[APP.tempState.qIdx];
+                    
+                    let optsHtml = '';
+                    if (q.opts) {
+                        q.opts.forEach((o, i) => {
+                            optsHtml += Button(o, `ans_${i}`, 'outline', 'w-full text-left text-xl py-4 mb-3 bg-white');
+                        });
+                    } else if(game.type === 'doors') {
+                         optsHtml = Button(`Buka Pintu (Jawab: ${q.a})`, `ans_0`, 'primary', 'w-full py-4 text-xl');
+                    }
+
+                    gameContent = `
+                        <div class="text-center animate-fade-in max-w-2xl mx-auto w-full">
+                            <h3 class="text-3xl font-black text-blue-800 mb-6">${game.title}</h3>
+                            <div class="bg-yellow-50 border-4 border-yellow-300 p-8 rounded-3xl mb-8 shadow-inner">
+                                ${game.type === 'doors' ? '<div class="text-7xl mb-6">🚪</div>' : ''}
+                                <p class="text-2xl font-bold text-gray-800 leading-relaxed">${q.q}</p>
+                            </div>
+                            <div class="space-y-4" id="quizOpts">
+                                ${optsHtml}
+                            </div>
+                            <div id="gameMsg" class="mt-6 p-4 rounded-xl font-bold text-xl hidden transition-all"></div>
+                        </div>
+                    `;
+                } else if (game.type === 'sort') {
+                    if(!APP.tempState.items) APP.tempState.items = [...game.items].sort(() => Math.random() - 0.5);
+                    
+                    let itemsHtml = APP.tempState.items.map((item, i) => `
+                        <div class="flex items-center bg-white border-2 border-blue-200 p-4 rounded-2xl shadow-sm mb-3 transition-transform hover:scale-[1.01]">
+                            <span class="text-2xl font-black text-blue-400 w-10">${i+1}.</span>
+                            <span class="flex-1 text-lg font-bold text-gray-700">${item}</span>
+                            <div class="flex gap-2">
+                                <button data-action="sort_up_${i}" class="bg-blue-100 p-3 text-xl rounded-xl hover:bg-blue-200 active:scale-95 transition-transform" ${i===0?'disabled opacity-30':''}>🔼</button>
+                                <button data-action="sort_down_${i}" class="bg-blue-100 p-3 text-xl rounded-xl hover:bg-blue-200 active:scale-95 transition-transform" ${i===APP.tempState.items.length-1?'disabled opacity-30':''}>🔽</button>
+                            </div>
+                        </div>
+                    `).join('');
+
+                    gameContent = `
+                        <div class="animate-fade-in max-w-2xl mx-auto w-full">
+                            <h3 class="text-3xl font-black text-blue-800 mb-2 text-center">${game.title}</h3>
+                            <p class="text-lg font-semibold text-center text-gray-600 mb-8 bg-gray-50 p-3 rounded-xl border">${game.instruction}</p>
+                            <div class="mb-8">${itemsHtml}</div>
+                            ${Button('Cek Susunan Jawaban', 'check_sort', 'success', 'w-full py-4 text-xl')}
+                            <div id="gameMsg" class="mt-6 text-center font-bold text-xl hidden"></div>
+                        </div>
+                    `;
+                } else if (game.type === 'match') {
+                    if(!APP.tempState.rights) APP.tempState.rights = [...game.pairs.map(p=>p.r)].sort(() => Math.random() - 0.5);
+                    if(!APP.tempState.ans) APP.tempState.ans = {};
+
+                    let pairsHtml = game.pairs.map((p, i) => {
+                        let options = `<option value="" disabled ${!APP.tempState.ans[p.l] ? 'selected' : ''}>-- Pilih Pasangan --</option>`;
+                        APP.tempState.rights.forEach(r => {
+                            options += `<option value="${r}" ${APP.tempState.ans[p.l] === r ? 'selected' : ''}>${r}</option>`;
+                        });
+                        return `
+                        <div class="bg-blue-50 p-5 rounded-2xl border-2 border-blue-200 mb-4 shadow-sm">
+                            <p class="font-bold text-xl mb-3 text-gray-800">${p.l}</p>
+                            <select data-match-left="${p.l}" class="w-full p-4 rounded-xl border-2 border-gray-300 text-lg font-semibold focus:border-blue-500 focus:outline-none bg-white shadow-sm match-select">
+                                ${options}
+                            </select>
+                        </div>`;
+                    }).join('');
+
+                    gameContent = `
+                        <div class="animate-fade-in max-w-2xl mx-auto w-full">
+                            <h3 class="text-3xl font-black text-blue-800 mb-8 text-center">${game.title}</h3>
+                            <div class="mb-8">${pairsHtml}</div>
+                            ${Button('Periksa Pasangan', 'check_match', 'primary', 'w-full py-4 text-xl')}
+                            <div id="gameMsg" class="mt-6 text-center font-bold text-xl hidden"></div>
+                        </div>
+                    `;
+                } else if (game.type === 'categorize') {
+                    if(APP.tempState.cIdx === undefined) APP.tempState.cIdx = 0;
+                    const item = game.items[APP.tempState.cIdx];
+                    
+                    gameContent = `
+                        <div class="text-center animate-fade-in max-w-2xl mx-auto w-full">
+                            <h3 class="text-3xl font-black text-blue-800 mb-8">${game.title}</h3>
+                            <div class="bg-white border-4 border-indigo-200 p-10 rounded-3xl mb-10 shadow-lg">
+                                <p class="text-3xl font-black text-gray-800 leading-relaxed">${item.text}</p>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                                ${Button('✅ Ini Sedekah', 'cat_sedekah', 'success', 'flex-1 py-5 text-xl')}
+                                ${Button('❌ Bukan Sedekah', 'cat_bukan', 'warning', 'flex-1 py-5 text-xl')}
+                            </div>
+                            <div id="gameMsg" class="mt-8 text-2xl font-black text-blue-600 hidden"></div>
+                        </div>
+                    `;
+                } else if (game.type === 'catch') {
+                    // Khusus Catch Game, kita menggunakan wrapper sederhana dan inject logika via listener khusus
+                    gameContent = `
+                        <div class="animate-fade-in max-w-3xl mx-auto w-full flex flex-col h-[500px]">
+                            <h3 class="text-3xl font-black text-blue-800 mb-4 text-center shrink-0">${game.title}</h3>
+                            <div id="catchArea" class="flex-1 relative bg-gradient-to-b from-blue-50 to-blue-200 border-4 border-blue-400 rounded-3xl overflow-hidden shadow-inner touch-none">
+                                <div class="absolute top-4 left-4 z-10 bg-white px-4 py-2 rounded-xl shadow-md border-2 border-blue-200 font-black text-xl text-blue-800">Skor: <span id="cScore">0</span></div>
+                                <div class="absolute top-4 right-4 z-10 bg-white px-4 py-2 rounded-xl shadow-md border-2 border-red-200 font-black text-xl text-red-600">Waktu: <span id="cTime">15</span>s</div>
+                                <div id="cOverlay" class="absolute inset-0 bg-black/60 z-20 flex flex-col items-center justify-center text-white hidden">
+                                    <h2 id="cResTitle" class="text-4xl font-black mb-4"></h2>
+                                    <p class="text-2xl mb-8">Skor kamu: <span id="cResScore"></span>/40</p>
+                                    <div id="cResBtn"></div>
+                                </div>
+                                <p class="text-center mt-16 px-4 text-gray-500 font-bold opacity-70 text-lg absolute w-full pointer-events-none z-0">${game.instruction}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                innerHTML = `
+                    <div class="flex flex-col h-full bg-white p-2 md:p-6 rounded-b-3xl">
+                        <div class="flex justify-center mb-6 shrink-0">
+                            <span class="bg-yellow-100 text-yellow-800 font-black px-6 py-2 rounded-full shadow border border-yellow-300">
+                                Tantangan ${APP.gameIdx + 1} / ${data.games.length}
+                            </span>
+                        </div>
+                        <div class="flex-1 flex flex-col justify-center overflow-y-auto overflow-x-hidden p-2">
+                            ${gameContent}
+                        </div>
+                    </div>
+                `;
+            } else if (APP.lvlStage === 'assessment') {
+                if(!APP.tempState.ans) APP.tempState.ans = {};
+                
+                if (APP.tempState.score !== undefined) {
+                    // Result View
+                    const score = APP.tempState.score;
+                    let resultHtml = `
+                        <div class="animate-fade-in p-4 max-w-4xl mx-auto">
+                            <div class="p-8 rounded-3xl text-center shadow-xl mb-8 border-4 ${score >= 80 ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400'}">
+                                <h2 class="text-4xl font-black text-gray-800 mb-2">Asesmen Selesai!</h2>
+                                <p class="text-7xl font-black my-6 ${score>=80?'text-green-600':'text-yellow-600'}">${score}</p>
+                                <p class="text-2xl font-bold text-gray-700">${score >= 90 ? 'Sangat Baik! 🌟' : score >= 80 ? 'Baik! 👍' : score >= 70 ? 'Cukup Baik!' : 'Perlu Bimbingan, Tetap Semangat! 💪'}</p>
+                            </div>
+                            <div class="space-y-6">
+                                <h3 class="text-2xl font-black border-b-2 border-gray-200 pb-3 text-gray-800">Pembahasan:</h3>
+                    `;
+                    
+                    data.assessment.forEach(q => {
+                        let isBenar = false;
+                        let userAnsRaw = APP.tempState.ans[q.id];
+                        if (q.type === 'pg' || q.type === 'tf' || q.type === 'case') {
+                            isBenar = userAnsRaw == q.a; // loose equality intentionally
+                        } else if (q.type === 'match') {
+                            isBenar = q.pairs.every(p => APP.tempState.ans[`${q.id}_${p.l}`] === p.r);
+                        }
+                        
+                        resultHtml += `
+                            <div class="p-5 rounded-2xl border-l-8 shadow-md bg-white ${isBenar ? 'border-green-500' : 'border-red-500'}">
+                                <p class="font-bold text-lg mb-3 text-gray-800">${q.q}</p>
+                                <div class="inline-block px-4 py-1 rounded-full text-sm font-bold mb-3 ${isBenar ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                    ${isBenar ? '✅ Jawaban Benar' : '❌ Jawaban Salah'}
+                                </div>
+                                <div class="bg-blue-50 p-4 rounded-xl text-gray-700 text-base leading-relaxed border border-blue-100">
+                                    <span class="font-black text-blue-800">💡 Penjelasan: </span>
+                                    ${q.pembahasan || (q.type==='match'?'Cocokkan pasangan sesuai materi yang diajarkan.':'')}
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    resultHtml += `
+                            </div>
+                            <div class="mt-10 text-center sticky bottom-4 z-20">
+                                ${Button('Simpan Nilai & Kembali ke Peta', 'saveAssessment', 'primary', 'w-full max-w-lg py-5 text-xl shadow-2xl')}
+                            </div>
+                        </div>
+                    `;
+                    innerHTML = `<div class="bg-white min-h-full rounded-b-3xl pb-10">${resultHtml}</div>`;
+                } else {
+                    // Question List View
+                    let qsHtml = data.assessment.map((q, idx) => {
+                        let innerQ = '';
+                        if (q.type === 'pg' || q.type === 'tf' || q.type === 'case') {
+                            innerQ = `<div class="space-y-3 mt-4">`;
+                            q.options.forEach((opt, j) => {
+                                const checked = APP.tempState.ans[q.id] == j ? 'checked' : '';
+                                innerQ += `
+                                    <label class="flex items-center space-x-4 p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all ${checked?'bg-blue-50 border-blue-400':''}">
+                                        <input type="radio" name="${q.id}" value="${j}" class="w-6 h-6 text-blue-600 assess-radio" ${checked}>
+                                        <span class="text-lg font-medium text-gray-700">${opt}</span>
+                                    </label>
+                                `;
+                            });
+                            innerQ += `</div>`;
+                        } else if (q.type === 'match') {
+                            innerQ = `<div class="space-y-4 bg-gray-50 p-5 rounded-2xl mt-4 border border-gray-200">`;
+                            const rights = [...q.pairs.map(x=>x.r)].sort();
+                            q.pairs.forEach(p => {
+                                const selVal = APP.tempState.ans[`${q.id}_${p.l}`] || '';
+                                let opts = `<option value="" disabled ${!selVal?'selected':''}>-- Pilih Pasangan --</option>`;
+                                rights.forEach(r => { opts += `<option value="${r}" ${selVal===r?'selected':''}>${r}</option>`; });
+                                innerQ += `
+                                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-3 last:border-0 last:pb-0 gap-2">
+                                        <span class="font-bold text-lg text-gray-800 md:w-1/2">${p.l}</span>
+                                        <select data-assess-match="${q.id}_${p.l}" class="p-3 border-2 border-gray-300 rounded-xl md:w-1/2 bg-white font-semibold text-gray-700 focus:border-blue-500 assess-select">
+                                            ${opts}
+                                        </select>
+                                    </div>
+                                `;
+                            });
+                            innerQ += `</div>`;
+                        }
+                        return `
+                            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                                <p class="text-xl font-bold text-gray-800 leading-relaxed">${q.q}</p>
+                                ${innerQ}
+                            </div>
+                        `;
+                    }).join('');
+
+                    innerHTML = `
+                        <div class="animate-fade-in p-4 md:p-8 bg-gray-50 min-h-full rounded-b-3xl">
+                            ${DialogBox("Saatnya menguji pengetahuanmu! Jawablah 10 pertanyaan ini dengan cermat. Semoga berhasil!", "📝")}
+                            <div class="space-y-6 mt-8 max-w-4xl mx-auto">
+                                ${qsHtml}
+                            </div>
+                            <div class="mt-10 pt-6 border-t-2 border-dashed border-gray-300 max-w-4xl mx-auto text-center pb-8">
+                                ${Button('Selesai & Lihat Hasil', 'finishAssessment', 'success', 'w-full py-5 text-xl max-w-lg shadow-xl')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            root.innerHTML = `
+                <div class="flex-1 bg-blue-100 flex items-center justify-center p-2 md:p-6 py-10 relative">
+                    <div class="absolute inset-0 opacity-20 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:20px_20px]"></div>
+                    <div class="max-w-4xl w-full bg-white rounded-3xl shadow-2xl flex flex-col relative z-10 max-h-[90vh] overflow-hidden">
+                        <div class="bg-blue-600 text-white px-6 py-4 flex justify-between items-center shadow-md z-20 shrink-0">
+                            <h2 class="font-black text-xl truncate pr-4">${data.title}</h2>
+                            <button data-action="toMap" class="text-blue-200 hover:text-white font-bold bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-xl transition-colors">❌ Keluar</button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto bg-gray-50" id="levelContent">
+                            ${innerHTML}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Pasang event listener khusus setelah render DOM jika diperlukan
+            if (APP.lvlStage === 'games') {
+                const game = data.games[APP.gameIdx];
+                if (game.type === 'match') bindMatchGameEvents();
+                if (game.type === 'catch') initCatchGame(game);
+            } else if (APP.lvlStage === 'assessment') {
+                bindAssessmentEvents();
+            }
+        }
+
+
+        // --- EVENT DELEGATION (MAIN CONTROLLER) ---
+        root.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            const action = btn.getAttribute('data-action');
+
+            if (action === 'toIntro') setView('intro');
+            else if (action === 'toLoginSiswa') setView('loginSiswa');
+            else if (action === 'toLoginGuru') setView('loginGuru');
+            else if (action === 'toMap') setView('map');
+            else if (action.startsWith('start_p')) {
+                APP.currentLvl = action.split('_')[1];
+                APP.lvlStage = 'slides'; APP.slideIdx = 0; APP.gameIdx = 0; APP.tempState = {};
+                setView('level');
+            }
+            else if (action === 'nextSlide') {
+                const max = GAME_DATA[APP.currentLvl].slides.length - 1;
+                if(APP.slideIdx < max) { APP.slideIdx++; render(); }
+                else { APP.lvlStage = 'games'; render(); }
+            }
+            // Game Handlers
+            else if (action.startsWith('ans_')) {
+                handleQuizAnswer(parseInt(action.split('_')[1]), btn);
+            }
+            else if (action.startsWith('sort_')) {
+                const p = action.split('_');
+                handleSort(p[1], parseInt(p[2]));
+            }
+            else if (action === 'check_sort') {
+                handleCheckSort();
+            }
+            else if (action === 'check_match') {
+                handleCheckMatch();
+            }
+            else if (action.startsWith('cat_')) {
+                handleCategorize(action.split('_')[1]);
+            }
+            // Assessment Handlers
+            else if (action === 'finishAssessment') {
+                calculateAssessmentScore();
+            }
+            else if (action === 'saveAssessment') {
+                saveProgress();
+            }
+        });
+
+        // --- SPECIFIC GAME LOGIC ---
+
+        function displayMsg(msg, isErr) {
+            const el = document.getElementById('gameMsg');
+            if(!el) return;
+            el.textContent = msg;
+            el.className = `mt-6 p-4 rounded-xl font-bold text-xl block animate-fade-in ${isErr ? 'bg-red-100 text-red-700 border-2 border-red-300' : 'bg-green-100 text-green-700 border-2 border-green-300'}`;
+        }
+
+        function advanceGame() {
+            setTimeout(() => {
+                const max = GAME_DATA[APP.currentLvl].games.length - 1;
+                APP.tempState = {}; // reset volatile state
+                if (APP.gameIdx < max) { APP.gameIdx++; render(); }
+                else { APP.lvlStage = 'assessment'; render(); }
+            }, 1500);
+        }
+
+        function handleQuizAnswer(idx, btnEl) {
+            const game = GAME_DATA[APP.currentLvl].games[APP.gameIdx];
+            const q = game.qs[APP.tempState.qIdx];
+            
+            // disable buttons temporarily
+            document.querySelectorAll('#quizOpts button').forEach(b => {b.disabled=true; b.classList.add('opacity-50');});
+            
+            let isCorrect = false;
+            if(game.type === 'doors') isCorrect = (idx === q.a);
+            else isCorrect = (idx === q.a);
+
+            if (isCorrect) {
+                playSound('correct');
+                btnEl.classList.remove('bg-white', 'text-blue-600', 'border-blue-400');
+                btnEl.classList.add('bg-green-500', 'text-white', 'border-green-600');
+                displayMsg(q.msg || 'Tepat Sekali! Keren!', false);
+                
+                setTimeout(() => {
+                    if (APP.tempState.qIdx < game.qs.length - 1) {
+                        APP.tempState.qIdx++; render();
+                    } else { advanceGame(); }
+                }, 1500);
+            } else {
+                playSound('wrong');
+                btnEl.classList.remove('bg-white', 'border-blue-400');
+                btnEl.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+                displayMsg('Ups, kurang tepat. Coba lagi!', true);
+                
+                setTimeout(() => {
+                    btnEl.classList.remove('bg-red-100', 'border-red-400', 'text-red-700', 'opacity-50');
+                    btnEl.classList.add('bg-white', 'border-blue-400');
+                    document.querySelectorAll('#quizOpts button').forEach(b => {b.disabled=false; b.classList.remove('opacity-50');});
+                    document.getElementById('gameMsg').classList.add('hidden');
+                }, 1500);
+            }
+        }
+
+        function handleSort(dir, idx) {
+            const items = APP.tempState.items;
+            if (dir === 'up' && idx > 0) { [items[idx], items[idx-1]] = [items[idx-1], items[idx]]; }
+            if (dir === 'down' && idx < items.length - 1) { [items[idx], items[idx+1]] = [items[idx+1], items[idx]]; }
+            render();
+        }
+
+        function handleCheckSort() {
+            const game = GAME_DATA[APP.currentLvl].games[APP.gameIdx];
+            if (JSON.stringify(APP.tempState.items) === JSON.stringify(game.items)) {
+                playSound('yay'); displayMsg('Susunan Sempurna! Hebat!', false);
+                advanceGame();
+            } else {
+                playSound('wrong'); displayMsg('Masih ada yang belum pas posisinya, coba teliti lagi.', true);
+                setTimeout(()=>document.getElementById('gameMsg').classList.add('hidden'), 2000);
+            }
+        }
+
+        function bindMatchGameEvents() {
+            document.querySelectorAll('.match-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const key = e.target.getAttribute('data-match-left');
+                    APP.tempState.ans[key] = e.target.value;
+                });
+            });
+        }
+
+        function handleCheckMatch() {
+            const game = GAME_DATA[APP.currentLvl].games[APP.gameIdx];
+            const isCorrect = game.pairs.every(p => APP.tempState.ans[p.l] === p.r);
+            if (isCorrect) {
+                playSound('yay'); displayMsg('Semua pasangan cocok! Luar Biasa!', false);
+                advanceGame();
+            } else {
+                playSound('wrong'); displayMsg('Ada yang tertukar pasangannya, yuk cek lagi!', true);
+                setTimeout(()=>document.getElementById('gameMsg').classList.add('hidden'), 2000);
+            }
+        }
+
+        function handleCategorize(cat) {
+            const game = GAME_DATA[APP.currentLvl].games[APP.gameIdx];
+            const item = game.items[APP.tempState.cIdx];
+            if (cat === item.cat) {
+                playSound('correct'); displayMsg('Tepat!', false);
+                setTimeout(() => {
+                    if(APP.tempState.cIdx < game.items.length - 1) { APP.tempState.cIdx++; render(); }
+                    else { advanceGame(); }
+                }, 1000);
+            } else {
+                playSound('wrong'); displayMsg('Kurang tepat, ayo pikirkan lagi!', true);
+                setTimeout(()=>document.getElementById('gameMsg').classList.add('hidden'), 1000);
+            }
+        }
+
+        // --- CATCH GAME ENGINE ---
+        let catchIntervals = [];
+        function clearGameIntervals() {
+            catchIntervals.forEach(clearInterval);
+            catchIntervals = [];
+        }
+
+        function initCatchGame(game) {
+            APP.tempState.cScore = 0;
+            APP.tempState.cTime = 15;
+            APP.tempState.cItems = [];
+            APP.tempState.cPlaying = true;
+            
+            const area = document.getElementById('catchArea');
+            if(!area) return;
+
+            const updateUI = () => {
+                const sEl = document.getElementById('cScore');
+                const tEl = document.getElementById('cTime');
+                if(sEl) sEl.textContent = APP.tempState.cScore;
+                if(tEl) tEl.textContent = APP.tempState.cTime;
+            };
+
+            // Main Loop Timer
+            const tId = setInterval(() => {
+                if(!APP.tempState.cPlaying) return;
+                APP.tempState.cTime--;
+                updateUI();
+                
+                if (APP.tempState.cTime <= 0) {
+                    APP.tempState.cPlaying = false;
+                    endCatchGame(area);
+                }
+            }, 1000);
+            catchIntervals.push(tId);
+
+            // Spawner
+            const sId = setInterval(() => {
+                if(!APP.tempState.cPlaying) return;
+                if(Math.random() > 0.4) {
+                    const isGood = Math.random() > 0.4;
+                    const emojis = isGood ? ['🎁','💰','🤝','😊'] : ['😠','🗑️'];
+                    const em = emojis[Math.floor(Math.random() * emojis.length)];
+                    
+                    const el = document.createElement('div');
+                    el.className = 'falling-item select-none touch-none';
+                    el.textContent = em;
+                    el.style.left = `${Math.random() * 80 + 10}%`;
+                    el.style.top = '-10%';
+                    el.dataset.isGood = isGood;
+                    
+                    // Click handler (also touch)
+                    const clickFn = (e) => {
+                        if(!APP.tempState.cPlaying) return;
+                        e.preventDefault(); // prevent double fire on touch
+                        if(el.dataset.clicked) return;
+                        el.dataset.clicked = true;
+                        
+                        if(isGood) { playSound('correct'); APP.tempState.cScore += 10; }
+                        else { playSound('wrong'); APP.tempState.cScore = Math.max(0, APP.tempState.cScore - 5); }
+                        
+                        updateUI();
+                        el.style.transform = 'scale(0) rotate(180deg)';
+                        el.style.opacity = '0';
+                        setTimeout(() => el.remove(), 200);
+                    };
+                    
+                    el.addEventListener('mousedown', clickFn);
+                    el.addEventListener('touchstart', clickFn, {passive: false});
+                    
+                    area.appendChild(el);
+                    APP.tempState.cItems.push({el, top: -10});
+                }
+            }, 500);
+            catchIntervals.push(sId);
+
+            // Mover (60fps approx)
+            const mId = setInterval(() => {
+                if(!APP.tempState.cPlaying) return;
+                APP.tempState.cItems = APP.tempState.cItems.filter(item => {
+                    if(!item.el.parentElement) return false;
+                    item.top += 1.5;
+                    item.el.style.top = `${item.top}%`;
+                    if(item.top > 110) {
+                        item.el.remove();
+                        return false;
+                    }
+                    return true;
+                });
+            }, 20);
+            catchIntervals.push(mId);
+        }
+
+        function endCatchGame(area) {
+            clearGameIntervals();
+            const ov = document.getElementById('cOverlay');
+            const tit = document.getElementById('cResTitle');
+            const scr = document.getElementById('cResScore');
+            const btn = document.getElementById('cResBtn');
+            
+            if(!ov) return;
+            ov.classList.remove('hidden');
+            scr.textContent = APP.tempState.cScore;
+            
+            if (APP.tempState.cScore >= 40) {
+                playSound('yay');
+                tit.textContent = 'MISI BERHASIL! 🎉';
+                btn.innerHTML = Button('Lanjut Misi Berikutnya', 'cNext', 'success', 'px-8 py-4');
+                btn.querySelector('button').onclick = () => advanceGame();
+            } else {
+                playSound('wrong');
+                tit.textContent = 'WAKTU HABIS! ⏰';
+                btn.innerHTML = Button('Coba Lagi', 'cRetry', 'warning', 'px-8 py-4');
+                btn.querySelector('button').onclick = () => {
+                    area.querySelectorAll('.falling-item').forEach(e=>e.remove());
+                    initCatchGame(GAME_DATA[APP.currentLvl].games[APP.gameIdx]);
+                    ov.classList.add('hidden');
+                };
+            }
+        }
+
+        // --- ASSESSMENT LOGIC ---
+        function bindAssessmentEvents() {
+            // Radio buttons
+            document.querySelectorAll('.assess-radio').forEach(r => {
+                r.addEventListener('change', (e) => {
+                    APP.tempState.ans[e.target.name] = e.target.value;
+                    // visual update
+                    document.querySelectorAll(`input[name="${e.target.name}"]`).forEach(inp => {
+                        const lbl = inp.closest('label');
+                        if(inp.checked) { lbl.classList.add('bg-blue-50', 'border-blue-400'); }
+                        else { lbl.classList.remove('bg-blue-50', 'border-blue-400'); }
+                    });
+                });
+            });
+            // Selects
+            document.querySelectorAll('.assess-select').forEach(s => {
+                s.addEventListener('change', (e) => {
+                    APP.tempState.ans[e.target.getAttribute('data-assess-match')] = e.target.value;
+                });
+            });
+        }
+
+        function calculateAssessmentScore() {
+            const data = GAME_DATA[APP.currentLvl].assessment;
+            
+            // Validate all answered
+            let allAnswered = true;
+            data.forEach(q => {
+                if (q.type === 'pg' || q.type === 'tf' || q.type === 'case') {
+                    if (APP.tempState.ans[q.id] === undefined) allAnswered = false;
+                } else if (q.type === 'match') {
+                    q.pairs.forEach(p => { if (!APP.tempState.ans[`${q.id}_${p.l}`]) allAnswered = false; });
+                }
+            });
+
+            if (!allAnswered) {
+                alert("Harap jawab semua pertanyaan terlebih dahulu sebelum menyelesaikan asesmen!"); // Fallback native is fine here but we can use DOM. Let's use simple alert for brevity or create custom logic. Custom logic is better to follow rules.
+                const btn = document.querySelector('[data-action="finishAssessment"]');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '⚠️ Jawab Semua Soal Dulu!';
+                btn.classList.replace('bg-green-500', 'bg-red-500');
+                setTimeout(()=>{ btn.innerHTML=orig; btn.classList.replace('bg-red-500', 'bg-green-500'); }, 2000);
+                return;
+            }
+
+            let correct = 0;
+            data.forEach(q => {
+                if (q.type === 'pg' || q.type === 'tf' || q.type === 'case') {
+                    if (APP.tempState.ans[q.id] == q.a) correct++;
+                } else if (q.type === 'match') {
+                    if (q.pairs.every(p => APP.tempState.ans[`${q.id}_${p.l}`] === p.r)) correct++;
+                }
+            });
+
+            APP.tempState.score = correct * 10;
+            if(APP.tempState.score >= 70) playSound('yay'); else playSound('wrong');
+            render();
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function saveProgress() {
+            const score = APP.tempState.score;
+            const updated = { ...APP.student };
+            const lvl = APP.currentLvl;
+            
+            if(lvl === 'p1') { updated.scores.a1 = Math.max(updated.scores.a1, score); updated.progress.p1 = true; }
+            if(lvl === 'p2') { updated.scores.a2 = Math.max(updated.scores.a2, score); updated.progress.p2 = true; }
+            if(lvl === 'p3') { updated.scores.a3 = Math.max(updated.scores.a3, score); updated.progress.p3 = true; }
+            
+            APP.student = updated;
+            
+            try {
+                // Simpan ke localStorage
+                const students = JSON.parse(localStorage.getItem('paiStudents') || '[]');
+                const idx = students.findIndex(s => s.id === APP.student.id);
+                if(idx !== -1) {
+                    students[idx].scores = updated.scores;
+                    students[idx].progress = updated.progress;
+                    students[idx].lastActive = Date.now();
+                    localStorage.setItem('paiStudents', JSON.stringify(students));
+                }
+            } catch (e) { console.error('Gagal menyimpan ke localStorage', e); }
+            
+            setView('map');
+        }
+
+
+        // --- DATABASE & AUTH OPERATIONS ---
+        async function initApp() {
+            // Langsung masuk ke intro
+            setTimeout(() => {
+                setView('intro');
+            }, 500);
+        }
+
+        async function loginStudent(name, kelas) {
+            setView('loading');
+            setTimeout(() => {
+                try {
+                    const students = JSON.parse(localStorage.getItem('paiStudents') || '[]');
+                    let found = students.find(s => s.name.toLowerCase() === name.toLowerCase() && s.kelas === kelas);
+                    
+                    if(!found) {
+                        const newStudent = { id: 'stu_' + Date.now(), name, kelas, progress: { p1: false, p2: false, p3: false }, scores: { a1: 0, a2: 0, a3: 0 }, lastActive: Date.now() };
+                        students.push(newStudent);
+                        localStorage.setItem('paiStudents', JSON.stringify(students));
+                        found = newStudent;
+                    } else {
+                        // Update last active
+                        found.lastActive = Date.now();
+                        localStorage.setItem('paiStudents', JSON.stringify(students));
+                    }
+                    APP.student = found;
+                    setView('map');
+                } catch(e) {
+                    console.error("LocalStorage error:", e);
+                    APP.student = { id: 'local', name, kelas, progress: { p1: false, p2: false, p3: false }, scores: { a1: 0, a2: 0, a3: 0 } };
+                    setView('map');
+                }
+            }, 500);
+        }
+
+        async function fetchTeacherData() {
+            setView('loading');
+            setTimeout(() => {
+                try {
+                    const students = JSON.parse(localStorage.getItem('paiStudents') || '[]');
+                    APP.teacherData = students.sort((a,b) => b.lastActive - a.lastActive);
+                    setView('dashboard');
+                } catch(e) {
+                    console.error("LocalStorage error:", e);
+                    alert("Gagal memuat data dari browser.");
+                    setView('loginGuru');
+                }
+            }, 500);
+        }
+
+        // Start
+        initApp();
+        
+    </script>
+</body>
+</html>
